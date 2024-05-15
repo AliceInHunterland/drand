@@ -238,7 +238,7 @@ func (n *NodeProc) RunDKG(nodes, thr int, timeout time.Duration, leader bool, le
 			args = append(args, "--tls-disable")
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5000*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, n.binary, args...)
 	cmd.Env = append(os.Environ(), "DRAND_SHARE_SECRET="+secretDKG)

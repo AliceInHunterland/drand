@@ -25,7 +25,7 @@ import (
 )
 
 // 1s after dkg finishes, (new or reshared) beacon starts
-var beaconOffset = 1
+var beaconOffset = 2
 
 // how much should we wait before checking if the randomness is present. This is
 // mostly due to the fact we run on localhost on cheap machine with CI so we
@@ -154,6 +154,8 @@ func (e *Orchestrator) startNodes(nodes []node.Node) {
 func (e *Orchestrator) RunDKG(timeout time.Duration) {
 	fmt.Println("[+] Running DKG for all nodes")
 	time.Sleep(100 * time.Millisecond)
+	startTime := time.Now() // Start timing the DKG process
+
 	leader := e.nodes[0]
 	var wg sync.WaitGroup
 	wg.Add(len(e.nodes))
@@ -173,14 +175,12 @@ func (e *Orchestrator) RunDKG(timeout time.Duration) {
 		n := n
 		fmt.Printf("\t- Running DKG for node %s\n", n.PrivateAddr())
 		go func(n node.Node) {
-			defer func() {
-				if err := recover(); err != nil {
-					panicCh <- err
-				}
-				wg.Done()
-			}()
 			n.RunDKG(e.n, e.thr, timeout, false, leader.PrivateAddr(), beaconOffset)
 			fmt.Println("\t FINISHED DKG")
+			if err := recover(); err != nil {
+				panicCh <- err
+			}
+			wg.Done()
 		}(n)
 	}
 	wg.Wait()
@@ -190,14 +190,33 @@ func (e *Orchestrator) RunDKG(timeout time.Duration) {
 	default:
 	}
 
+	duration := time.Since(startTime) // Calculate the duration of the DKG process
+	fmt.Println(duration)
 	fmt.Println("[+] Nodes finished running DKG. Checking keys...")
 	// we pass the current group path
+	startTime = time.Now()
 	g := e.checkDKGNodes(e.nodes, e.groupPath)
+	KeysDuration := time.Since(startTime)
 	// overwrite group to group path
 	e.group = g
 	e.genesis = g.GenesisTime
 	checkErr(key.Save(e.groupPath, e.group, false))
 	fmt.Println("\t- Overwrite group with distributed key to ", e.groupPath)
+	logToFile(len(e.nodes), duration, KeysDuration)
+}
+
+func logToFile(nodeCount int, duration time.Duration, KeysDuration time.Duration) {
+	file, err := os.OpenFile("./test.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Printf("Error opening file: %v\n", err)
+		return
+	}
+	defer file.Close()
+
+	_, err = fmt.Fprintf(file, "%d,%v,%v\n", nodeCount, duration, KeysDuration)
+	if err != nil {
+		fmt.Printf("Error writing to file: %v\n", err)
+	}
 }
 
 func (e *Orchestrator) checkDKGNodes(nodes []node.Node, groupPath string) *key.Group {
@@ -636,7 +655,7 @@ func (e *Orchestrator) Shutdown() {
 		fmt.Println("\t- Successfully stopped Node", no.Index(), "(", no.PrivateAddr(), ")")
 	}
 	fmt.Println("\t- Successfully sent Stop command to all node")
-	time.Sleep(time.Minute)
+	time.Sleep(3 * time.Minute)
 }
 
 func runCommand(c *exec.Cmd, add ...string) []byte {

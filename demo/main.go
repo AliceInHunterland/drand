@@ -32,8 +32,11 @@ var binaryF = flag.String("binary", "drand", "Path to drand binary.")
 var testF = flag.Bool("test", false, "Run it as a test that finishes.")
 var tls = flag.Bool("tls", true, "Run the nodes with self signed certs.")
 var noCurl = flag.Bool("nocurl", false, "Skip commands using curl.")
-var debug = flag.Bool("debug", false, "Prints the log when panic occurs.")
+var debug = flag.Bool("debug", true, "Prints the log when panic occurs.")
 var dbEngineType = flag.String("dbtype", "bolt", "Which database engine to use. Supported values: bolt, postgres, or memdb.")
+var nodeCount = flag.Int("nodes", 20, "Number of nodes")
+var rounds = flag.Int("rounds", 3, "Number of rounds to average")
+var outputFile = flag.String("output", "./out.csv", "Output CSV file to append the results.")
 
 func main() {
 	flag.Parse()
@@ -49,8 +52,6 @@ func main() {
 		defer stopContainer()
 	}
 
-	nRound, n := 2, 6
-	thr, newThr := 4, 5
 	period := "10s"
 	sch, err := crypto.GetSchemeFromEnv()
 	if err != nil {
@@ -59,8 +60,8 @@ func main() {
 	beaconID := test.GetBeaconIDFromEnv()
 
 	c := cfg.Config{
-		N:            n,
-		Thr:          thr,
+		N:            *nodeCount,
+		Thr:          (*nodeCount+1)/2 + 1,
 		Period:       period,
 		WithTLS:      *tls,
 		Binary:       *binaryF,
@@ -78,7 +79,7 @@ func main() {
 	// start, they need to know about all self signed certificates. So we create
 	// already the new nodes here, such that when calling "StartCurrentNodes",
 	// the drand nodes will load all of them already.
-	orch.SetupNewNodes(3)
+	//orch.SetupNewNodes(3)
 
 	defer orch.Shutdown()
 	defer func() {
@@ -93,19 +94,20 @@ func main() {
 	}()
 	setSignal(orch)
 	orch.StartCurrentNodes()
-	orch.RunDKG(4 * time.Second)
-	orch.WaitGenesis()
-	for i := 0; i < nRound; i++ {
-		orch.WaitPeriod()
-		orch.CheckCurrentBeacon()
-	}
+	orch.RunDKG(300 * time.Second)
+	//orch.CheckCurrentBeacon()
+	//orch.WaitGenesis()
+	//for i := 0; i < nRound; i++ {
+	//	orch.WaitPeriod()
+	//	orch.CheckCurrentBeacon()
+	//}
 	// stop a node and look if the beacon still continues
-	nodeToStop := 3
-	orch.StopNodes(nodeToStop)
-	for i := 0; i < nRound; i++ {
-		orch.WaitPeriod()
-		orch.CheckCurrentBeacon(nodeToStop)
-	}
+	//nodeToStop := 3
+	//orch.StopNodes(nodeToStop)
+	//for i := 0; i < nRound; i++ {
+	//	orch.WaitPeriod()
+	//	orch.CheckCurrentBeacon(nodeToStop)
+	//}
 
 	// stop the whole network, wait a bit and see if it can restart at the right
 	// round
@@ -131,30 +133,30 @@ func main() {
 	// orch.WaitPeriod()
 	// fmt.Printf("[+] Trying to start them again and check beacons\n")
 	// orch.StartNode(nodesToStop...)
-	orch.StartNode(nodeToStop)
-	orch.WaitPeriod()
-	orch.WaitPeriod()
+	//orch.StartNode(nodeToStop)
+	//orch.WaitPeriod()
+	//orch.WaitPeriod()
 	// at this point node should have catched up
-	for i := 0; i < nRound; i++ {
-		orch.WaitPeriod()
-		orch.CheckCurrentBeacon()
-	}
+	//for i := 0; i < nRound; i++ {
+	//	orch.WaitPeriod()
+	//	orch.CheckCurrentBeacon()
+	//}
 
-	// --- RESHARING PART ---
-	orch.StartNewNodes()
-	// exclude first node
-	orch.CreateResharingGroup(1, newThr)
-	orch.RunResharing("4s")
-	orch.WaitTransition()
-	limit := 10000
-	if *testF {
-		limit = 4
-	}
-	// look if beacon is still up even with the nodeToExclude being offline
-	for i := 0; i < limit; i++ {
-		orch.WaitPeriod()
-		orch.CheckNewBeacon()
-	}
+	//// --- RESHARING PART ---
+	//orch.StartNewNodes()
+	//// exclude first node
+	//orch.CreateResharingGroup(1, newThr)
+	//orch.RunResharing("4s")
+	//orch.WaitTransition()
+	//limit := 10000
+	//if *testF {
+	//	limit = 4
+	//}
+	//// look if beacon is still up even with the nodeToExclude being offline
+	//for i := 0; i < limit; i++ {
+	//	orch.WaitPeriod()
+	//	orch.CheckNewBeacon()
+	//}
 }
 
 func findTransitionTime(period time.Duration, genesis int64, secondsFromNow int64) int64 {

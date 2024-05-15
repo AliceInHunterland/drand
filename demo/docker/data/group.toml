@@ -1,5 +1,6 @@
 Threshold = 3
-Period = "10s"
+Period = "20s"
+CatchupPeriod = "10s"
 
 [[Nodes]]
 Address = "172.16.238.2:8082"
